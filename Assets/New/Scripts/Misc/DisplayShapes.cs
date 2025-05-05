@@ -84,7 +84,7 @@ public static class DisplayShapes
     public static void DrawCircle(Vector3 circleCenter, float radius, ColorOptions color, Space2D space)
     {
         //Generate the vertices and the indices
-        int circleResolution = 100;
+        int circleResolution = 20;
 
         List<Vector3> vertices = new List<Vector3>();
         List<int> indices = new List<int>();
@@ -109,6 +109,11 @@ public static class DisplayShapes
                 vertex = new Vector3(x, 0f, y) + circleCenter;
             }
 
+            if (i % 3 == 0)
+            {
+                indices.Add(0);
+            }
+
 
             vertices.Add(vertex);
             indices.Add(i);
@@ -120,7 +125,7 @@ public static class DisplayShapes
         Mesh m = new Mesh();
 
         m.SetVertices(vertices);
-        m.SetIndices(indices, MeshTopology.LineStrip, 0);
+        m.SetIndices(indices, MeshTopology.Triangles, 0);
 
         //Display the mesh
         Material material = GetMaterial(color);
