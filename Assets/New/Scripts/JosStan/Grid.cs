@@ -56,8 +56,7 @@ public class Grid : MonoBehaviour
 
         DrawGrid();
     }
-    
-    
+
 
     private void AddSource(float dt)
     {
@@ -72,6 +71,25 @@ public class Grid : MonoBehaviour
                 {
                     cell.Density += sourceCell.Density * dt;
                     cell.Velocity += sourceCell.Velocity * dt;
+                }
+            }
+        }
+    }
+
+    private void Diffuse(float dt, float diffusionRate)
+    {
+        float a = dt * diffusionRate * Rows * Columns;
+        for (int k = 0; k < 20; k++)
+        {
+            for (int i = 0; i < Rows; i++)
+            {
+                for (int j = 0; j < Columns; j++)
+                {
+                    //x[IX(i,j)] = (x0[IX(i,j)] + a*(x[IX(i-1,j)]+x[IX(i+1,j)]+ x[IX(i,j-1)]+x[IX(i,j+1)]))/(1+4*a);
+                    cells[i, j].Density += a * (cells[i - 1, j].Density
+                                                  + cells[i + 1, j].Density
+                                                  + cells[i, j - 1].Density 
+                                                  + cells[i, j + 1].Density);
                 }
             }
         }
