@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
-//Help class to display geometric shapes
+//Helper class to display geometric shapes
 public static class DisplayShapes
 {
     private static readonly Material matWhite;
