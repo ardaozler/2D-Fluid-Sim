@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -28,8 +29,10 @@ public class Grid : MonoBehaviour
     public float CellSize = 1.0f;
     public Color CellColor = Color.white;
     private Cell[,] cells;
-
     private Cell[,] sourceCells;
+
+    public float DiffusionRate = 0.01f;
+    public float AdvectionCount = 20;
 
     void Start()
     {
@@ -40,6 +43,7 @@ public class Grid : MonoBehaviour
             {
                 Vector2 position = new Vector2(j * CellSize, i * CellSize);
                 cells[i, j] = new Cell(position, CellSize, CellColor);
+                cells[i, j].Velocity = Vector2.up;
             }
         }
 
@@ -52,9 +56,15 @@ public class Grid : MonoBehaviour
             }
         }
 
-        sourceCells[0, 0].Density = 0.8f;
+        sourceCells[1, 1].Density = 0.2f;
 
         DrawGrid();
+    }
+
+    private void FixedUpdate()
+    {
+        AddSource(Time.deltaTime);
+        Diffuse(Time.deltaTime);
     }
 
 
@@ -76,23 +86,25 @@ public class Grid : MonoBehaviour
         }
     }
 
-    private void Diffuse(float dt, float diffusionRate)
+    private void Diffuse(float dt)
     {
-        float a = dt * diffusionRate * Rows * Columns;
-        for (int k = 0; k < 20; k++)
+        float a = dt * DiffusionRate * Rows * Columns;
+
+        var prev = cells;
+        for (int k = 0; k < AdvectionCount; k++)
         {
-            for (int i = 0; i < Rows; i++)
+            for (int i = 1; i < Rows - 1; i++)
             {
-                for (int j = 0; j < Columns; j++)
+                for (int j = 1; j < Columns - 1; j++)
                 {
-                    //x[IX(i,j)] = (x0[IX(i,j)] + a*(x[IX(i-1,j)]+x[IX(i+1,j)]+ x[IX(i,j-1)]+x[IX(i,j+1)]))/(1+4*a);
-                    cells[i, j].Density += a * (cells[i - 1, j].Density
-                                                  + cells[i + 1, j].Density
-                                                  + cells[i, j - 1].Density 
-                                                  + cells[i, j + 1].Density);
+                    cells[i, j].Density = (prev[i, j].Density + a * (cells[i - 1, j].Density
+                                                                     + cells[i + 1, j].Density
+                                                                     + cells[i, j - 1].Density
+                                                                     + cells[i, j + 1].Density)) / (1 + 4 * a);
                 }
             }
         }
+        
     }
 
     private void DrawGrid()
