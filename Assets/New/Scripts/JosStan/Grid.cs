@@ -34,6 +34,8 @@ public class Grid : MonoBehaviour
     public float DiffusionRate = 0.01f;
     public float AdvectionCount = 20;
 
+    public float SourceCellAddingRate = 100f; // Rate at which source cells add density and velocity
+
     void Start()
     {
         cells = new Cell[Rows, Columns];
@@ -56,7 +58,7 @@ public class Grid : MonoBehaviour
             }
         }
 
-        sourceCells[1, 1].Density = 0.2f;
+        sourceCells[5, 5].Density = 0.8f;
 
         DrawGrid();
     }
@@ -77,10 +79,14 @@ public class Grid : MonoBehaviour
                 Cell cell = cells[i, j];
                 Cell sourceCell = sourceCells[i, j];
 
-                if (sourceCell.Density > 0f)
+                if (sourceCell.Density > 0f && cell.Density < sourceCell.Density)
                 {
-                    cell.Density += sourceCell.Density * dt;
-                    cell.Velocity += sourceCell.Velocity * dt;
+                    cell.Density += sourceCell.Density * dt * SourceCellAddingRate;
+                }
+
+                if (sourceCell.Velocity.magnitude > 0f && cell.Velocity.magnitude < sourceCell.Velocity.magnitude)
+                {
+                    cell.Velocity += sourceCell.Velocity * (dt * SourceCellAddingRate);
                 }
             }
         }
@@ -104,7 +110,19 @@ public class Grid : MonoBehaviour
                 }
             }
         }
-        
+
+        //Boundaries
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            cells[i, 0].Density = cells[i, 1].Density; // bottom
+            cells[i, Rows - 1].Density = cells[i, Rows - 2].Density; // top
+        }
+
+        for (int i = 0; i < Columns; i++)
+        {
+            cells[0, i].Density = cells[1, i].Density; // left
+            cells[Columns - 1, i].Density = cells[Columns - 2, i].Density; // right
+        }
     }
 
     private void DrawGrid()
