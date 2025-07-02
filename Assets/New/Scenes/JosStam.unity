@@ -285,13 +285,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 079ea1ebdaa524d4c9b66b089729baab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Rows: 10
+  Rows: 20
   Columns: 10
   CellSize: 1
   CellColor: {r: 1, g: 1, b: 1, a: 1}
-  DiffusionRate: 0.01
-  AdvectionCount: 20
-  SourceCellAddingRate: 1000
+  DiffusionRate: 0.001
+  AdvectionCount: 1
+  SourceCellAddingRate: 10
 --- !u!4 &573240691
 Transform:
   m_ObjectHideFlags: 0

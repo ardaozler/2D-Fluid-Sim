@@ -166,6 +166,7 @@ public static class DisplayShapes
 
         Graphics.DrawMesh(m, Vector3.zero, Quaternion.identity, material, 0, Camera.main, 0);
     }
+    
 
 
     //Draw vertices

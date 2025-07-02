@@ -67,6 +67,7 @@ public class Grid : MonoBehaviour
     {
         AddSource(Time.deltaTime);
         Diffuse(Time.deltaTime);
+        Advect(Time.deltaTime);
     }
 
 
@@ -111,17 +112,53 @@ public class Grid : MonoBehaviour
             }
         }
 
-        //Boundaries
+        BoundaryDensities();
+    }
+
+    private void Advect(float dt)
+    {
+        var prev = cells;
+
         for (int i = 1; i < Rows - 1; i++)
         {
-            cells[i, 0].Density = cells[i, 1].Density; // bottom
-            cells[i, Rows - 1].Density = cells[i, Rows - 2].Density; // top
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                float x = j - dt * cells[i, j].Velocity.x;
+                float y = i - dt * cells[i, j].Velocity.y;
+
+                x = Mathf.Clamp(x, 0f, Columns - 1f);
+                y = Mathf.Clamp(y, 0f, Rows - 1f);
+
+                int j0 = Mathf.FloorToInt(x);
+                int i0 = Mathf.FloorToInt(y);
+                int j1 = j0 + 1;
+                int i1 = i0 + 1;
+
+                float s1 = x - j0;
+                float s0 = 1f - s1;
+                float t1 = y - i0;
+                float t0 = 1f - t1;
+
+                cells[i, j].Density = s0 * (t0 * prev[i0, j0].Density + t1 * prev[i1, j0].Density) +
+                                      s1 * (t0 * prev[i0, j1].Density + t1 * prev[i1, j1].Density);
+            }
+        }
+
+        BoundaryDensities();
+    }
+
+    private void BoundaryDensities()
+    {
+        for (int i = 0; i < Rows; i++)
+        {
+            cells[i, 0].Density = cells[i, 1].Density; //left
+            cells[i, Columns - 1].Density = cells[i, Columns - 2].Density; //right
         }
 
         for (int i = 0; i < Columns; i++)
         {
-            cells[0, i].Density = cells[1, i].Density; // left
-            cells[Columns - 1, i].Density = cells[Columns - 2, i].Density; // right
+            cells[0, i].Density = cells[1, i].Density; //bottom  
+            cells[Rows - 1, i].Density = cells[Rows - 2, i].Density; //top
         }
     }
 
