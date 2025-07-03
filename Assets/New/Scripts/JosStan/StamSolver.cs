@@ -1,5 +1,3 @@
-using System;
-using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -14,11 +12,15 @@ public class Cell
     public Vector2 Velocity { get; set; } = Vector2.zero;
     public float Density { get; set; } = 0f;
 
-    public Cell(Vector2 position, float size, Color color, bool listenToMouse)
+    private float _mouseSize;
+
+
+    public Cell(Vector2 position, float size, Color color, bool listenToMouse, float mouseBrushSize)
     {
         Position = position;
         Size = size;
         Color = color;
+        _mouseSize = mouseBrushSize;
 
         if (listenToMouse)
         {
@@ -27,17 +29,17 @@ public class Cell
         }
     }
 
-    private void OnMoseLeftClickOrHold(Vector2 mousePosition)
+    private void OnMoseLeftClickOrHold(Vector2 mousePosition, float mouseSpeed)
     {
-        if (Vector2.Distance(mousePosition, Center) < Size / 2)
+        if (Vector2.Distance(mousePosition, Center) < _mouseSize)
         {
-            Velocity = 2 * (mousePosition - Center); // Set velocity towards the mouse position
+            Velocity = mouseSpeed * 5 * (mousePosition - Center); // Set velocity towards the mouse position
         }
     }
 
     private void OnMouseRightClickOrHold(Vector2 mousePosition)
     {
-        if (Vector2.Distance(mousePosition, Center) < Size / 2)
+        if (Vector2.Distance(mousePosition, Center) < _mouseSize)
         {
             Density = Mathf.Clamp(Density + 0.1f, 0f, 1f); // Increase density on right click
         }
@@ -46,8 +48,10 @@ public class Cell
 
 public class StamSolver : MonoBehaviour
 {
-    public int Rows = 10;
+    public float mouseBrushSize = 0.1f; // Size of the mouse brush for density and velocity changes
+
     public int Columns = 10;
+    public int Rows = 10;
     public float CellSize = 1.0f;
     public Color CellColor = Color.white;
     private Cell[,] cells;
@@ -78,9 +82,9 @@ public class StamSolver : MonoBehaviour
             for (int j = 0; j < Columns; j++)
             {
                 Vector2 pos = new Vector2(j * CellSize, i * CellSize);
-                cells[i, j] = new Cell(pos, CellSize, CellColor, true);
+                cells[i, j] = new Cell(pos, CellSize, CellColor, true, mouseBrushSize);
                 cells[i, j].Velocity = Vector2.up;
-                sourceCells[i, j] = new Cell(pos, CellSize, CellColor, false);
+                sourceCells[i, j] = new Cell(pos, CellSize, CellColor, false, mouseBrushSize);
             }
         }
 
@@ -351,6 +355,17 @@ public class StamSolver : MonoBehaviour
 
     private void DrawGrid()
     {
+        //only draw the borders
+        Debug.DrawLine(new Vector3(0, 0, 0), new Vector3(Columns * CellSize, 0, 0),
+            Color.gray, 10000);
+        Debug.DrawLine(new Vector3(0, Rows * CellSize, 0), new Vector3(Columns * CellSize, Rows * CellSize, 0),
+            Color.gray, 10000);
+        Debug.DrawLine(new Vector3(0, 0, 0), new Vector3(0, Rows * CellSize, 0), Color.gray, 10000);
+        Debug.DrawLine(new Vector3(Columns * CellSize, 0, 0), new Vector3(Columns * CellSize, Rows * CellSize, 0),
+            Color.gray, 10000);
+
+
+        return;
         for (int i = 0; i <= Rows; i++)
         {
             Debug.DrawLine(new Vector3(0, i * CellSize, 0), new Vector3(Columns * CellSize, i * CellSize, 0),

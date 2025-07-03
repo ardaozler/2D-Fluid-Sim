@@ -7,7 +7,7 @@ public class MouseTracker : MonoBehaviour
     private Vector2 _mousePosition;
 
     public Action<Vector2> OnMouseRightClickOrHold;
-    public Action<Vector2> OnMouseLeftClickOrHold;
+    public Action<Vector2, float> OnMouseLeftClickOrHold;
 
 
     private void Awake()
@@ -27,9 +27,11 @@ public class MouseTracker : MonoBehaviour
     {
         _mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 
+
         if (Input.GetMouseButton(0)) // Left mouse button
         {
-            OnMouseLeftClickOrHold?.Invoke(_mousePosition);
+            OnMouseLeftClickOrHold?.Invoke(_mousePosition,
+                (new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"))).magnitude);
         }
 
         if (Input.GetMouseButton(1)) // Right mouse button
