@@ -14,11 +14,33 @@ public class Cell
     public Vector2 Velocity { get; set; } = Vector2.zero;
     public float Density { get; set; } = 0f;
 
-    public Cell(Vector2 position, float size, Color color)
+    public Cell(Vector2 position, float size, Color color, bool listenToMouse)
     {
         Position = position;
         Size = size;
         Color = color;
+
+        if (listenToMouse)
+        {
+            MouseTracker.Instance.OnMouseLeftClickOrHold += OnMoseLeftClickOrHold;
+            MouseTracker.Instance.OnMouseRightClickOrHold += OnMouseRightClickOrHold;
+        }
+    }
+
+    private void OnMoseLeftClickOrHold(Vector2 mousePosition)
+    {
+        if (Vector2.Distance(mousePosition, Center) < Size / 2)
+        {
+            Velocity = 2 * (mousePosition - Center); // Set velocity towards the mouse position
+        }
+    }
+
+    private void OnMouseRightClickOrHold(Vector2 mousePosition)
+    {
+        if (Vector2.Distance(mousePosition, Center) < Size / 2)
+        {
+            Density = Mathf.Clamp(Density + 0.1f, 0f, 1f); // Increase density on right click
+        }
     }
 }
 
@@ -44,7 +66,7 @@ public class StamSolver : MonoBehaviour
             for (int j = 0; j < Columns; j++)
             {
                 Vector2 position = new Vector2(j * CellSize, i * CellSize);
-                cells[i, j] = new Cell(position, CellSize, CellColor);
+                cells[i, j] = new Cell(position, CellSize, CellColor, true);
                 cells[i, j].Velocity = Vector2.up;
             }
         }
@@ -54,7 +76,7 @@ public class StamSolver : MonoBehaviour
         {
             for (int j = 0; j < Columns; j++)
             {
-                sourceCells[i, j] = new Cell(cells[i, j].Position, cells[i, j].Size, cells[i, j].Color);
+                sourceCells[i, j] = new Cell(cells[i, j].Position, cells[i, j].Size, cells[i, j].Color, false);
             }
         }
 
