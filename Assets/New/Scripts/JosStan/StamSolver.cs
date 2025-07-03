@@ -88,7 +88,7 @@ public class StamSolver : MonoBehaviour
             }
         }
 
-        //sourceCells[5, 5].Density = 0.8f;
+        //sourceCells[5, 5].Velocity = new Vector2(0f, .5f);
 
         DrawGrid();
     }
@@ -209,8 +209,9 @@ public class StamSolver : MonoBehaviour
 
                 int j0 = Mathf.FloorToInt(x);
                 int i0 = Mathf.FloorToInt(y);
-                int j1 = j0 + 1;
-                int i1 = i0 + 1;
+                int j1 = Mathf.Min(j0 + 1, Columns - 1);
+                int i1 = Mathf.Min(i0 + 1, Rows - 1);
+
 
                 float s1 = x - j0;
                 float s0 = 1f - s1;
@@ -238,9 +239,10 @@ public class StamSolver : MonoBehaviour
             for (int j = 1; j < Columns - 1; j++)
             {
                 div[i, j] = -0.5f * (
-                    cells[i + 1, j].Velocity.x - cells[i - 1, j].Velocity.x +
-                    cells[i, j + 1].Velocity.y - cells[i, j - 1].Velocity.y
+                    cells[i, j + 1].Velocity.x - cells[i, j - 1].Velocity.x
+                    + cells[i + 1, j].Velocity.y - cells[i - 1, j].Velocity.y
                 );
+
                 p[i, j] = 0f;
             }
         }
@@ -248,25 +250,22 @@ public class StamSolver : MonoBehaviour
         //boundary conditions for divergence
         for (int i = 1; i < Rows - 1; i++)
         {
-            div[i, 0] = -cells[i, 0].Velocity.x; // left
-            div[i, Columns - 1] = cells[i, Columns - 2].Velocity.x; // right
-        }
+            // mirror div at left/right
+            div[i, 0] = div[i, 1];
+            div[i, Columns - 1] = div[i, Columns - 2];
 
-        for (int j = 1; j < Columns - 1; j++)
-        {
-            div[0, j] = -cells[0, j].Velocity.y; // bottom
-            div[Rows - 1, j] = cells[Rows - 2, j].Velocity.y; // top
-        }
-
-        //boundary for pressure
-        for (int i = 1; i < Rows - 1; i++)
-        {
+            //mirror pressure at left/right
             p[i, 0] = p[i, 1]; // left
             p[i, Columns - 1] = p[i, Columns - 2]; // right
         }
 
         for (int j = 1; j < Columns - 1; j++)
         {
+            // mirror div at bottom/top
+            div[0, j] = div[1, j];
+            div[Rows - 1, j] = div[Rows - 2, j];
+
+            //mirror pressure at bottom/top
             p[0, j] = p[1, j]; // bottom
             p[Rows - 1, j] = p[Rows - 2, j]; // top
         }
@@ -302,8 +301,8 @@ public class StamSolver : MonoBehaviour
             for (int j = 1; j < Columns - 1; j++)
             {
                 cells[i, j].Velocity = new Vector2(
-                    cells[i, j].Velocity.x - 0.5f * (p[i + 1, j] - p[i - 1, j]),
-                    cells[i, j].Velocity.y - 0.5f * (p[i, j + 1] - p[i, j - 1])
+                    cells[i, j].Velocity.x - 0.5f * (p[i, j + 1] - p[i, j - 1]),
+                    cells[i, j].Velocity.y - 0.5f * (p[i + 1, j] - p[i - 1, j])
                 );
             }
         }
@@ -332,12 +331,12 @@ public class StamSolver : MonoBehaviour
             // bottom (i = 0): invert y
             cells[0, j].Velocity = new Vector2(
                 cells[1, j].Velocity.x,
-                0
+                -cells[1, j].Velocity.y
             );
             // top (i = Rows-1): invert y
             cells[Rows - 1, j].Velocity = new Vector2(
                 cells[Rows - 2, j].Velocity.x,
-                0
+                -cells[Rows - 2, j].Velocity.y
             );
         }
 
@@ -345,12 +344,12 @@ public class StamSolver : MonoBehaviour
         {
             // left (j = 0): invert x
             cells[i, 0].Velocity = new Vector2(
-                0,
+                -cells[i, 1].Velocity.x,
                 cells[i, 1].Velocity.y
             );
             // right (j = Columns-1): invert x
             cells[i, Columns - 1].Velocity = new Vector2(
-                0,
+                -cells[i, Columns - 2].Velocity.x,
                 cells[i, Columns - 2].Velocity.y
             );
         }
@@ -385,12 +384,16 @@ public class StamSolver : MonoBehaviour
             return;
         }
 
+        Color color = CellColor;
+
         foreach (var cell in cells)
         {
-            Gizmos.color = cell.Color;
-            Gizmos.DrawWireSphere(cell.Center, cell.Density * cell.Size / 4);
-            Gizmos.color = Color.green;
-            Gizmos.DrawLine(cell.Center, cell.Center + cell.Velocity * cell.Size / 2);
+            color.a = cell.Density;
+            Gizmos.color = color;
+            Gizmos.DrawCube(cell.Center, new Vector3(cell.Size, cell.Size, 0.1f));
+            //Gizmos.color = Color.green;
+            //Gizmos.DrawLine(cell.Center, cell.Center + cell.Velocity * cell.Size / 2);
+            //Gizmos.DrawSphere(cell.Center + cell.Velocity * cell.Size / 2, cell.Size / 32);
         }
     }
 }
