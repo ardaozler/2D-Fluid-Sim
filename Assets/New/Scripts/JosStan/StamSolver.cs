@@ -62,11 +62,17 @@ public class StamSolver : MonoBehaviour
     private float[,] div;
     private float[,] p;
 
+    //buffers for diffusion
+    private float[,] oldDensity;
+    private Vector2[,] oldVelocity;
 
     void Start()
     {
         div = new float[Rows, Columns];
         p = new float[Rows, Columns];
+
+        oldDensity = new float[Rows, Columns];
+        oldVelocity = new Vector2[Rows, Columns];
 
         cells = new Cell[Rows, Columns];
         for (int i = 0; i < Rows; i++)
@@ -131,41 +137,42 @@ public class StamSolver : MonoBehaviour
     {
         float a = dt * DiffusionRate;
 
-        float[][] oldDensity = new float[Rows][];
-        for (int index = 0; index < Rows; index++)
-        {
-            oldDensity[index] = new float[Columns];
-        }
-
-        Vector2[][] oldVelocity = new Vector2[Rows][];
-        for (int index = 0; index < Rows; index++)
-        {
-            oldVelocity[index] = new Vector2[Columns];
-        }
-
+        float invDenom = 1f / (1f + 4f * a);
+        
         for (int i = 0; i < Rows; i++)
-        for (int j = 0; j < Columns; j++)
         {
-            oldDensity[i][j] = cells[i, j].Density;
-            oldVelocity[i][j] = cells[i, j].Velocity;
+            for (int j = 0; j < Columns; j++)
+            {
+                oldDensity[i, j] = cells[i, j].Density;
+                oldVelocity[i, j] = cells[i, j].Velocity;
+            }
         }
 
         for (int k = 0; k < AdvectionCount; k++)
         {
             for (int i = 1; i < Rows - 1; i++)
             {
+                var densRow = oldDensity;
+                var velRow = oldVelocity;
+                var cellsRef = cells;
+
                 for (int j = 1; j < Columns - 1; j++)
                 {
-                    //diffuse density
-                    cells[i, j].Density = (oldDensity[i][j] + a * (cells[i - 1, j].Density
-                                                                   + cells[i + 1, j].Density
-                                                                   + cells[i, j - 1].Density
-                                                                   + cells[i, j + 1].Density)) / (1 + 4 * a);
-                    //diffuse velocity
-                    cells[i, j].Velocity = (oldVelocity[i][j] + a * (cells[i - 1, j].Velocity
-                                                                     + cells[i + 1, j].Velocity
-                                                                     + cells[i, j - 1].Velocity
-                                                                     + cells[i, j + 1].Velocity)) / (1 + 4 * a);
+                    // diffuse density
+                    float sumN = cellsRef[i - 1, j].Density
+                                 + cellsRef[i + 1, j].Density
+                                 + cellsRef[i, j - 1].Density
+                                 + cellsRef[i, j + 1].Density;
+
+                    cellsRef[i, j].Density = (densRow[i, j] + a * sumN) * invDenom;
+
+                    // diffuse velocity
+                    Vector2 vSum = cellsRef[i - 1, j].Velocity
+                                   + cellsRef[i + 1, j].Velocity
+                                   + cellsRef[i, j - 1].Velocity
+                                   + cellsRef[i, j + 1].Velocity;
+
+                    cellsRef[i, j].Velocity = (velRow[i, j] + a * vSum) * invDenom;
                 }
             }
 
@@ -175,24 +182,13 @@ public class StamSolver : MonoBehaviour
 
     private void Advect(float dt)
     {
-        float[][] oldDensity = new float[Rows][];
-        for (int index = 0; index < Rows; index++)
-        {
-            oldDensity[index] = new float[Columns];
-        }
-
-        Vector2[][] oldVelocity = new Vector2[Rows][];
-        for (int index = 0; index < Rows; index++)
-        {
-            oldVelocity[index] = new Vector2[Columns];
-        }
 
         for (int i = 0; i < Rows; i++)
         {
             for (int j = 0; j < Columns; j++)
             {
-                oldDensity[i][j] = cells[i, j].Density;
-                oldVelocity[i][j] = cells[i, j].Velocity;
+                oldDensity[i, j] = cells[i, j].Density;
+                oldVelocity[i, j] = cells[i, j].Velocity;
             }
         }
 
@@ -201,8 +197,8 @@ public class StamSolver : MonoBehaviour
         {
             for (int j = 1; j < Columns - 1; j++)
             {
-                float x = j - dt * oldVelocity[i][j].x;
-                float y = i - dt * oldVelocity[i][j].y;
+                float x = j - dt * oldVelocity[i, j].x;
+                float y = i - dt * oldVelocity[i, j].y;
 
                 x = Mathf.Clamp(x, 0f, Columns - 1f);
                 y = Mathf.Clamp(y, 0f, Rows - 1f);
@@ -219,12 +215,12 @@ public class StamSolver : MonoBehaviour
                 float t0 = 1f - t1;
 
                 // Interpolate density
-                cells[i, j].Density = s0 * (t0 * oldDensity[i0][j0] + t1 * oldDensity[i1][j0]) +
-                                      s1 * (t0 * oldDensity[i0][j1] + t1 * oldDensity[i1][j1]);
+                cells[i, j].Density = s0 * (t0 * oldDensity[i0, j0] + t1 * oldDensity[i1, j0]) +
+                                      s1 * (t0 * oldDensity[i0, j1] + t1 * oldDensity[i1, j1]);
 
                 // Interpolate velocity
-                cells[i, j].Velocity = s0 * (t0 * oldVelocity[i0][j0] + t1 * oldVelocity[i1][j0]) +
-                                       s1 * (t0 * oldVelocity[i0][j1] + t1 * oldVelocity[i1][j1]);
+                cells[i, j].Velocity = s0 * (t0 * oldVelocity[i0, j0] + t1 * oldVelocity[i1, j0]) +
+                                       s1 * (t0 * oldVelocity[i0, j1] + t1 * oldVelocity[i1, j1]);
             }
         }
 
