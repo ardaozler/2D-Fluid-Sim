@@ -22,7 +22,7 @@ public class Cell
     }
 }
 
-public class Grid : MonoBehaviour
+public class StamSolver : MonoBehaviour
 {
     public int Rows = 10;
     public int Columns = 10;
