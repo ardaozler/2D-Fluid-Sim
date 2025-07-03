@@ -55,46 +55,34 @@ public class StamSolver : MonoBehaviour
 
     public float DiffusionRate = 0.01f;
     public int AdvectionCount = 20;
+    public float SourceCellAddingRate = 100f;
 
-    public float SourceCellAddingRate = 100f; // Rate at which source cells add density and velocity
-
-    //buffers for projection
-    private float[,] div;
-    private float[,] p;
-
-    //buffers for diffusion
-    private float[,] oldDensity;
-    private Vector2[,] oldVelocity;
+    // flattened buffers for projection and diffusion
+    private float[] div;
+    private float[] p;
+    private float[] oldDensity;
+    private Vector2[] oldVelocity;
 
     void Start()
     {
-        div = new float[Rows, Columns];
-        p = new float[Rows, Columns];
-
-        oldDensity = new float[Rows, Columns];
-        oldVelocity = new Vector2[Rows, Columns];
+        int N = Rows * Columns;
+        div = new float[N];
+        p = new float[N];
+        oldDensity = new float[N];
+        oldVelocity = new Vector2[N];
 
         cells = new Cell[Rows, Columns];
-        for (int i = 0; i < Rows; i++)
-        {
-            for (int j = 0; j < Columns; j++)
-            {
-                Vector2 position = new Vector2(j * CellSize, i * CellSize);
-                cells[i, j] = new Cell(position, CellSize, CellColor, true);
-                cells[i, j].Velocity = Vector2.up;
-            }
-        }
-
         sourceCells = new Cell[Rows, Columns];
         for (int i = 0; i < Rows; i++)
         {
             for (int j = 0; j < Columns; j++)
             {
-                sourceCells[i, j] = new Cell(cells[i, j].Position, cells[i, j].Size, cells[i, j].Color, false);
+                Vector2 pos = new Vector2(j * CellSize, i * CellSize);
+                cells[i, j] = new Cell(pos, CellSize, CellColor, true);
+                cells[i, j].Velocity = Vector2.up;
+                sourceCells[i, j] = new Cell(pos, CellSize, CellColor, false);
             }
         }
-
-        //sourceCells[5, 5].Velocity = new Vector2(0f, .5f);
 
         DrawGrid();
     }
@@ -108,6 +96,182 @@ public class StamSolver : MonoBehaviour
         Project();
     }
 
+    private void Diffuse(float dt)
+    {
+        float a = dt * DiffusionRate;
+        float invDen = 1f / (1f + 4f * a);
+        int W = Columns;
+
+        // copy out
+        for (int i = 0; i < Rows; i++)
+        {
+            for (int j = 0; j < Columns; j++)
+            {
+                int idx = i * W + j;
+                oldDensity[idx] = cells[i, j].Density;
+                oldVelocity[idx] = cells[i, j].Velocity;
+            }
+        }
+
+        // Gauss–Seidel
+        for (int sweep = 0; sweep < AdvectionCount; sweep++)
+        {
+            for (int i = 1; i < Rows - 1; i++)
+            {
+                for (int j = 1; j < Columns - 1; j++)
+                {
+                    int idx = i * W + j;
+
+                    // density
+                    float sumN = cells[i - 1, j].Density
+                                 + cells[i + 1, j].Density
+                                 + cells[i, j - 1].Density
+                                 + cells[i, j + 1].Density;
+                    cells[i, j].Density = (oldDensity[idx] + a * sumN) * invDen;
+
+                    // velocity
+                    Vector2 vSum = cells[i - 1, j].Velocity
+                                   + cells[i + 1, j].Velocity
+                                   + cells[i, j - 1].Velocity
+                                   + cells[i, j + 1].Velocity;
+                    cells[i, j].Velocity = (oldVelocity[idx] + a * vSum) * invDen;
+                }
+            }
+
+            BoundaryConditions();
+        }
+    }
+
+    private void Advect(float dt)
+    {
+        int W = Columns;
+        // copy out
+        for (int i = 0; i < Rows; i++)
+        {
+            for (int j = 0; j < Columns; j++)
+            {
+                int idx = i * W + j;
+                oldDensity[idx] = cells[i, j].Density;
+                oldVelocity[idx] = cells[i, j].Velocity;
+            }
+        }
+
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                int idx = i * W + j;
+                float x = j - dt * oldVelocity[idx].x;
+                float y = i - dt * oldVelocity[idx].y;
+
+                x = Mathf.Clamp(x, 0f, Columns - 1f);
+                y = Mathf.Clamp(y, 0f, Rows - 1f);
+
+                int j0 = Mathf.FloorToInt(x), i0 = Mathf.FloorToInt(y);
+                int j1 = Mathf.Min(j0 + 1, Columns - 1);
+                int i1 = Mathf.Min(i0 + 1, Rows - 1);
+
+                float s1 = x - j0, s0 = 1f - s1;
+                float t1 = y - i0, t0 = 1f - t1;
+
+                // density
+                int idx00 = i0 * W + j0;
+                int idx10 = i1 * W + j0;
+                int idx01 = i0 * W + j1;
+                int idx11 = i1 * W + j1;
+                cells[i, j].Density = s0 * (t0 * oldDensity[idx00] + t1 * oldDensity[idx10])
+                                      + s1 * (t0 * oldDensity[idx01] + t1 * oldDensity[idx11]);
+
+                // velocity
+                cells[i, j].Velocity = s0 * (t0 * oldVelocity[idx00] + t1 * oldVelocity[idx10])
+                                       + s1 * (t0 * oldVelocity[idx01] + t1 * oldVelocity[idx11]);
+            }
+        }
+
+        BoundaryConditions();
+    }
+
+    private void Project()
+    {
+        int W = Columns;
+        // divergence and zero p
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                int idx = i * W + j;
+                div[idx] = -0.5f * (
+                    cells[i, j + 1].Velocity.x - cells[i, j - 1].Velocity.x
+                    + cells[i + 1, j].Velocity.y - cells[i - 1, j].Velocity.y
+                );
+                p[idx] = 0f;
+            }
+        }
+
+        // mirror div and p at boundaries
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            int l = i * W, r = i * W + (W - 1);
+            div[l] = div[l + 1];
+            div[r] = div[r - 1];
+            p[l] = p[l + 1];
+            p[r] = p[r - 1];
+        }
+
+        for (int j = 1; j < Columns - 1; j++)
+        {
+            int b = j, t = (Rows - 1) * W + j;
+            div[b] = div[b + W];
+            div[t] = div[t - W];
+            p[b] = p[b + W];
+            p[t] = p[t - W];
+        }
+
+        // converge
+        for (int iter = 0; iter < AdvectionCount; iter++)
+        {
+            for (int i = 1; i < Rows - 1; i++)
+            {
+                for (int j = 1; j < Columns - 1; j++)
+                {
+                    int idx = i * W + j;
+                    p[idx] = (div[idx]
+                              + p[idx - W] + p[idx + W]
+                              + p[idx - 1] + p[idx + 1]) * 0.25f;
+                }
+            }
+
+            // reapply pressure boundaries
+            for (int i = 1; i < Rows - 1; i++)
+            {
+                int l = i * W, r = i * W + (W - 1);
+                p[l] = p[l + 1];
+                p[r] = p[r - 1];
+            }
+
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                int b = j, t = (Rows - 1) * W + j;
+                p[b] = p[b + W];
+                p[t] = p[t - W];
+            }
+        }
+
+        // subtract p from velocity
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                int idx = i * W + j;
+                cells[i, j].Velocity = new Vector2(
+                    cells[i, j].Velocity.x - 0.5f * (p[idx + 1] - p[idx - 1]),
+                    cells[i, j].Velocity.y - 0.5f * (p[idx + W] - p[idx - W])
+                );
+            }
+        }
+
+        BoundaryConditions();
+    }
 
     private void AddSource(float dt)
     {
@@ -131,179 +295,6 @@ public class StamSolver : MonoBehaviour
                 }
             }
         }
-    }
-
-    private void Diffuse(float dt)
-    {
-        float a = dt * DiffusionRate;
-
-        float invDenom = 1f / (1f + 4f * a);
-        
-        for (int i = 0; i < Rows; i++)
-        {
-            for (int j = 0; j < Columns; j++)
-            {
-                oldDensity[i, j] = cells[i, j].Density;
-                oldVelocity[i, j] = cells[i, j].Velocity;
-            }
-        }
-
-        for (int k = 0; k < AdvectionCount; k++)
-        {
-            for (int i = 1; i < Rows - 1; i++)
-            {
-                var densRow = oldDensity;
-                var velRow = oldVelocity;
-                var cellsRef = cells;
-
-                for (int j = 1; j < Columns - 1; j++)
-                {
-                    // diffuse density
-                    float sumN = cellsRef[i - 1, j].Density
-                                 + cellsRef[i + 1, j].Density
-                                 + cellsRef[i, j - 1].Density
-                                 + cellsRef[i, j + 1].Density;
-
-                    cellsRef[i, j].Density = (densRow[i, j] + a * sumN) * invDenom;
-
-                    // diffuse velocity
-                    Vector2 vSum = cellsRef[i - 1, j].Velocity
-                                   + cellsRef[i + 1, j].Velocity
-                                   + cellsRef[i, j - 1].Velocity
-                                   + cellsRef[i, j + 1].Velocity;
-
-                    cellsRef[i, j].Velocity = (velRow[i, j] + a * vSum) * invDenom;
-                }
-            }
-
-            BoundaryConditions();
-        }
-    }
-
-    private void Advect(float dt)
-    {
-
-        for (int i = 0; i < Rows; i++)
-        {
-            for (int j = 0; j < Columns; j++)
-            {
-                oldDensity[i, j] = cells[i, j].Density;
-                oldVelocity[i, j] = cells[i, j].Velocity;
-            }
-        }
-
-
-        for (int i = 1; i < Rows - 1; i++)
-        {
-            for (int j = 1; j < Columns - 1; j++)
-            {
-                float x = j - dt * oldVelocity[i, j].x;
-                float y = i - dt * oldVelocity[i, j].y;
-
-                x = Mathf.Clamp(x, 0f, Columns - 1f);
-                y = Mathf.Clamp(y, 0f, Rows - 1f);
-
-                int j0 = Mathf.FloorToInt(x);
-                int i0 = Mathf.FloorToInt(y);
-                int j1 = Mathf.Min(j0 + 1, Columns - 1);
-                int i1 = Mathf.Min(i0 + 1, Rows - 1);
-
-
-                float s1 = x - j0;
-                float s0 = 1f - s1;
-                float t1 = y - i0;
-                float t0 = 1f - t1;
-
-                // Interpolate density
-                cells[i, j].Density = s0 * (t0 * oldDensity[i0, j0] + t1 * oldDensity[i1, j0]) +
-                                      s1 * (t0 * oldDensity[i0, j1] + t1 * oldDensity[i1, j1]);
-
-                // Interpolate velocity
-                cells[i, j].Velocity = s0 * (t0 * oldVelocity[i0, j0] + t1 * oldVelocity[i1, j0]) +
-                                       s1 * (t0 * oldVelocity[i0, j1] + t1 * oldVelocity[i1, j1]);
-            }
-        }
-
-        BoundaryConditions();
-    }
-
-    private void Project()
-    {
-        //compute divergence and initialize pressure to 0
-        for (int i = 1; i < Rows - 1; i++)
-        {
-            for (int j = 1; j < Columns - 1; j++)
-            {
-                div[i, j] = -0.5f * (
-                    cells[i, j + 1].Velocity.x - cells[i, j - 1].Velocity.x
-                    + cells[i + 1, j].Velocity.y - cells[i - 1, j].Velocity.y
-                );
-
-                p[i, j] = 0f;
-            }
-        }
-
-        //boundary conditions for divergence
-        for (int i = 1; i < Rows - 1; i++)
-        {
-            // mirror div at left/right
-            div[i, 0] = div[i, 1];
-            div[i, Columns - 1] = div[i, Columns - 2];
-
-            //mirror pressure at left/right
-            p[i, 0] = p[i, 1]; // left
-            p[i, Columns - 1] = p[i, Columns - 2]; // right
-        }
-
-        for (int j = 1; j < Columns - 1; j++)
-        {
-            // mirror div at bottom/top
-            div[0, j] = div[1, j];
-            div[Rows - 1, j] = div[Rows - 2, j];
-
-            //mirror pressure at bottom/top
-            p[0, j] = p[1, j]; // bottom
-            p[Rows - 1, j] = p[Rows - 2, j]; // top
-        }
-
-        // Gauss Seidel iteration for pressure TODO: separate this maybe
-        for (int iter = 0; iter < AdvectionCount; iter++)
-        {
-            for (int i = 1; i < Rows - 1; i++)
-            {
-                for (int j = 1; j < Columns - 1; j++)
-                {
-                    p[i, j] = (div[i, j] + p[i - 1, j] + p[i + 1, j] + p[i, j - 1] + p[i, j + 1]) / 4f;
-                }
-            }
-
-            // Boundary conditions for pressure
-            for (int i = 1; i < Rows - 1; i++)
-            {
-                p[i, 0] = p[i, 1]; // left
-                p[i, Columns - 1] = p[i, Columns - 2]; // right
-            }
-
-            for (int j = 1; j < Columns - 1; j++)
-            {
-                p[0, j] = p[1, j]; // bottom
-                p[Rows - 1, j] = p[Rows - 2, j]; // top
-            }
-        }
-
-        // Update velocities based on pressure
-        for (int i = 1; i < Rows - 1; i++)
-        {
-            for (int j = 1; j < Columns - 1; j++)
-            {
-                cells[i, j].Velocity = new Vector2(
-                    cells[i, j].Velocity.x - 0.5f * (p[i, j + 1] - p[i, j - 1]),
-                    cells[i, j].Velocity.y - 0.5f * (p[i + 1, j] - p[i - 1, j])
-                );
-            }
-        }
-
-        BoundaryConditions();
     }
 
     private void BoundaryConditions()
