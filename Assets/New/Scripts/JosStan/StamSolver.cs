@@ -54,12 +54,20 @@ public class StamSolver : MonoBehaviour
     private Cell[,] sourceCells;
 
     public float DiffusionRate = 0.01f;
-    public float AdvectionCount = 20;
+    public int AdvectionCount = 20;
 
     public float SourceCellAddingRate = 100f; // Rate at which source cells add density and velocity
 
+    //buffers for projection
+    private float[,] div;
+    private float[,] p;
+
+
     void Start()
     {
+        div = new float[Rows, Columns];
+        p = new float[Rows, Columns];
+
         cells = new Cell[Rows, Columns];
         for (int i = 0; i < Rows; i++)
         {
@@ -89,7 +97,9 @@ public class StamSolver : MonoBehaviour
     {
         AddSource(Time.deltaTime);
         Diffuse(Time.deltaTime);
+        Project();
         Advect(Time.deltaTime);
+        Project();
     }
 
 
@@ -220,6 +230,87 @@ public class StamSolver : MonoBehaviour
         BoundaryConditions();
     }
 
+    private void Project()
+    {
+        //compute divergence and initialize pressure to 0
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                div[i, j] = -0.5f * (
+                    cells[i + 1, j].Velocity.x - cells[i - 1, j].Velocity.x +
+                    cells[i, j + 1].Velocity.y - cells[i, j - 1].Velocity.y
+                );
+                p[i, j] = 0f;
+            }
+        }
+
+        //boundary conditions for divergence
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            div[i, 0] = -cells[i, 0].Velocity.x; // left
+            div[i, Columns - 1] = cells[i, Columns - 2].Velocity.x; // right
+        }
+
+        for (int j = 1; j < Columns - 1; j++)
+        {
+            div[0, j] = -cells[0, j].Velocity.y; // bottom
+            div[Rows - 1, j] = cells[Rows - 2, j].Velocity.y; // top
+        }
+
+        //boundary for pressure
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            p[i, 0] = p[i, 1]; // left
+            p[i, Columns - 1] = p[i, Columns - 2]; // right
+        }
+
+        for (int j = 1; j < Columns - 1; j++)
+        {
+            p[0, j] = p[1, j]; // bottom
+            p[Rows - 1, j] = p[Rows - 2, j]; // top
+        }
+
+        // Gauss Seidel iteration for pressure TODO: separate this maybe
+        for (int iter = 0; iter < AdvectionCount; iter++)
+        {
+            for (int i = 1; i < Rows - 1; i++)
+            {
+                for (int j = 1; j < Columns - 1; j++)
+                {
+                    p[i, j] = (div[i, j] + p[i - 1, j] + p[i + 1, j] + p[i, j - 1] + p[i, j + 1]) / 4f;
+                }
+            }
+
+            // Boundary conditions for pressure
+            for (int i = 1; i < Rows - 1; i++)
+            {
+                p[i, 0] = p[i, 1]; // left
+                p[i, Columns - 1] = p[i, Columns - 2]; // right
+            }
+
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                p[0, j] = p[1, j]; // bottom
+                p[Rows - 1, j] = p[Rows - 2, j]; // top
+            }
+        }
+
+        // Update velocities based on pressure
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            for (int j = 1; j < Columns - 1; j++)
+            {
+                cells[i, j].Velocity = new Vector2(
+                    cells[i, j].Velocity.x - 0.5f * (p[i + 1, j] - p[i - 1, j]),
+                    cells[i, j].Velocity.y - 0.5f * (p[i, j + 1] - p[i, j - 1])
+                );
+            }
+        }
+
+        BoundaryConditions();
+    }
+
     private void BoundaryConditions()
     {
         //density
@@ -241,12 +332,12 @@ public class StamSolver : MonoBehaviour
             // bottom (i = 0): invert y
             cells[0, j].Velocity = new Vector2(
                 cells[1, j].Velocity.x,
-                -cells[1, j].Velocity.y
+                0
             );
             // top (i = Rows-1): invert y
             cells[Rows - 1, j].Velocity = new Vector2(
                 cells[Rows - 2, j].Velocity.x,
-                -cells[Rows - 2, j].Velocity.y
+                0
             );
         }
 
@@ -254,12 +345,12 @@ public class StamSolver : MonoBehaviour
         {
             // left (j = 0): invert x
             cells[i, 0].Velocity = new Vector2(
-                -cells[i, 1].Velocity.x,
+                0,
                 cells[i, 1].Velocity.y
             );
             // right (j = Columns-1): invert x
             cells[i, Columns - 1].Velocity = new Vector2(
-                -cells[i, Columns - 2].Velocity.x,
+                0,
                 cells[i, Columns - 2].Velocity.y
             );
         }
