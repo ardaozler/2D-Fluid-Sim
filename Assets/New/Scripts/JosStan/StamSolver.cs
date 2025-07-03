@@ -80,7 +80,7 @@ public class StamSolver : MonoBehaviour
             }
         }
 
-        sourceCells[5, 5].Density = 0.8f;
+        //sourceCells[5, 5].Density = 0.8f;
 
         DrawGrid();
     }
@@ -102,11 +102,13 @@ public class StamSolver : MonoBehaviour
                 Cell cell = cells[i, j];
                 Cell sourceCell = sourceCells[i, j];
 
+                //add density
                 if (sourceCell.Density > 0f && cell.Density < sourceCell.Density)
                 {
                     cell.Density += sourceCell.Density * dt * SourceCellAddingRate;
                 }
 
+                //add velocity
                 if (sourceCell.Velocity.magnitude > 0f && cell.Velocity.magnitude < sourceCell.Velocity.magnitude)
                 {
                     cell.Velocity += sourceCell.Velocity * (dt * SourceCellAddingRate);
@@ -117,36 +119,80 @@ public class StamSolver : MonoBehaviour
 
     private void Diffuse(float dt)
     {
-        float a = dt * DiffusionRate * Rows * Columns;
+        float a = dt * DiffusionRate;
 
-        var prev = cells;
+        float[][] oldDensity = new float[Rows][];
+        for (int index = 0; index < Rows; index++)
+        {
+            oldDensity[index] = new float[Columns];
+        }
+
+        Vector2[][] oldVelocity = new Vector2[Rows][];
+        for (int index = 0; index < Rows; index++)
+        {
+            oldVelocity[index] = new Vector2[Columns];
+        }
+
+        for (int i = 0; i < Rows; i++)
+        for (int j = 0; j < Columns; j++)
+        {
+            oldDensity[i][j] = cells[i, j].Density;
+            oldVelocity[i][j] = cells[i, j].Velocity;
+        }
+
         for (int k = 0; k < AdvectionCount; k++)
         {
             for (int i = 1; i < Rows - 1; i++)
             {
                 for (int j = 1; j < Columns - 1; j++)
                 {
-                    cells[i, j].Density = (prev[i, j].Density + a * (cells[i - 1, j].Density
-                                                                     + cells[i + 1, j].Density
-                                                                     + cells[i, j - 1].Density
-                                                                     + cells[i, j + 1].Density)) / (1 + 4 * a);
+                    //diffuse density
+                    cells[i, j].Density = (oldDensity[i][j] + a * (cells[i - 1, j].Density
+                                                                   + cells[i + 1, j].Density
+                                                                   + cells[i, j - 1].Density
+                                                                   + cells[i, j + 1].Density)) / (1 + 4 * a);
+                    //diffuse velocity
+                    cells[i, j].Velocity = (oldVelocity[i][j] + a * (cells[i - 1, j].Velocity
+                                                                     + cells[i + 1, j].Velocity
+                                                                     + cells[i, j - 1].Velocity
+                                                                     + cells[i, j + 1].Velocity)) / (1 + 4 * a);
                 }
             }
-        }
 
-        BoundaryDensities();
+            BoundaryConditions();
+        }
     }
 
     private void Advect(float dt)
     {
-        var prev = cells;
+        float[][] oldDensity = new float[Rows][];
+        for (int index = 0; index < Rows; index++)
+        {
+            oldDensity[index] = new float[Columns];
+        }
+
+        Vector2[][] oldVelocity = new Vector2[Rows][];
+        for (int index = 0; index < Rows; index++)
+        {
+            oldVelocity[index] = new Vector2[Columns];
+        }
+
+        for (int i = 0; i < Rows; i++)
+        {
+            for (int j = 0; j < Columns; j++)
+            {
+                oldDensity[i][j] = cells[i, j].Density;
+                oldVelocity[i][j] = cells[i, j].Velocity;
+            }
+        }
+
 
         for (int i = 1; i < Rows - 1; i++)
         {
             for (int j = 1; j < Columns - 1; j++)
             {
-                float x = j - dt * cells[i, j].Velocity.x;
-                float y = i - dt * cells[i, j].Velocity.y;
+                float x = j - dt * oldVelocity[i][j].x;
+                float y = i - dt * oldVelocity[i][j].y;
 
                 x = Mathf.Clamp(x, 0f, Columns - 1f);
                 y = Mathf.Clamp(y, 0f, Rows - 1f);
@@ -161,28 +207,70 @@ public class StamSolver : MonoBehaviour
                 float t1 = y - i0;
                 float t0 = 1f - t1;
 
-                cells[i, j].Density = s0 * (t0 * prev[i0, j0].Density + t1 * prev[i1, j0].Density) +
-                                      s1 * (t0 * prev[i0, j1].Density + t1 * prev[i1, j1].Density);
+                // Interpolate density
+                cells[i, j].Density = s0 * (t0 * oldDensity[i0][j0] + t1 * oldDensity[i1][j0]) +
+                                      s1 * (t0 * oldDensity[i0][j1] + t1 * oldDensity[i1][j1]);
+
+                // Interpolate velocity
+                cells[i, j].Velocity = s0 * (t0 * oldVelocity[i0][j0] + t1 * oldVelocity[i1][j0]) +
+                                       s1 * (t0 * oldVelocity[i0][j1] + t1 * oldVelocity[i1][j1]);
             }
         }
 
-        BoundaryDensities();
+        BoundaryConditions();
     }
 
-    private void BoundaryDensities()
+    private void BoundaryConditions()
     {
-        for (int i = 0; i < Rows; i++)
+        //density
+        for (int i = 1; i < Rows - 1; i++)
         {
-            cells[i, 0].Density = cells[i, 1].Density; //left
-            cells[i, Columns - 1].Density = cells[i, Columns - 2].Density; //right
+            cells[i, 0].Density = cells[i, 1].Density; // left
+            cells[i, Columns - 1].Density = cells[i, Columns - 2].Density; // right
         }
 
-        for (int i = 0; i < Columns; i++)
+        for (int j = 1; j < Columns - 1; j++)
         {
-            cells[0, i].Density = cells[1, i].Density; //bottom  
-            cells[Rows - 1, i].Density = cells[Rows - 2, i].Density; //top
+            cells[0, j].Density = cells[1, j].Density; // bottom
+            cells[Rows - 1, j].Density = cells[Rows - 2, j].Density; // top
         }
+
+        //velocities
+        for (int j = 1; j < Columns - 1; j++)
+        {
+            // bottom (i = 0): invert y
+            cells[0, j].Velocity = new Vector2(
+                cells[1, j].Velocity.x,
+                -cells[1, j].Velocity.y
+            );
+            // top (i = Rows-1): invert y
+            cells[Rows - 1, j].Velocity = new Vector2(
+                cells[Rows - 2, j].Velocity.x,
+                -cells[Rows - 2, j].Velocity.y
+            );
+        }
+
+        for (int i = 1; i < Rows - 1; i++)
+        {
+            // left (j = 0): invert x
+            cells[i, 0].Velocity = new Vector2(
+                -cells[i, 1].Velocity.x,
+                cells[i, 1].Velocity.y
+            );
+            // right (j = Columns-1): invert x
+            cells[i, Columns - 1].Velocity = new Vector2(
+                -cells[i, Columns - 2].Velocity.x,
+                cells[i, Columns - 2].Velocity.y
+            );
+        }
+
+        //corner velocities
+        cells[0, 0].Velocity = Vector2.zero;
+        cells[0, Columns - 1].Velocity = Vector2.zero;
+        cells[Rows - 1, 0].Velocity = Vector2.zero;
+        cells[Rows - 1, Columns - 1].Velocity = Vector2.zero;
     }
+
 
     private void DrawGrid()
     {
