@@ -3,6 +3,10 @@
 
 This Unity(6000.0.25f1) project implements a fluid simulation algorithm as described in Jos Stam's paper Real-Time Fluid Dynamics for Games, creating realistic fluid dynamics that are used in computer graphics, animation, and games.
 
+
+![fluidsim](https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExem92NWl5dWNmcHA5Z2V1Zm5wb253MHBhdWI1eGgyZ3l3aGUwNGp3dSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Jv0xM2IEl4glcCKtQh/giphy.gif)
+
+
 ## Table of Contents:
 - [Overview](#overview)
 
