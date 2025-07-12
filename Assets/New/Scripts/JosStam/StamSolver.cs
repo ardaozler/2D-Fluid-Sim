@@ -85,8 +85,13 @@ public class StamSolver : MonoBehaviour
                 cells[i, j] = new Cell(pos, CellSize, CellColor, true, mouseBrushSize);
                 cells[i, j].Velocity = Vector2.up;
                 sourceCells[i, j] = new Cell(pos, CellSize, CellColor, false, mouseBrushSize);
+                if (i < Rows / 2)
+                {
+                    cells[i, j].Velocity = 50 * Vector2.left;
+                }
             }
         }
+
 
         DrawGrid();
     }
